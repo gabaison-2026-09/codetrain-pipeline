@@ -1,0 +1,12 @@
+{
+  "key": "gen-question_gen.v1-bug_finding-d3-javascript-values-and-types",
+  "prompt_version": "v1",
+  "model": "claude-haiku-4-5",
+  "temperature": 0.7,
+  "response": {
+    "text": "{\"type\":\"bug_finding\",\"title\":\"ループの境界\",\"body\":\"次のコードにあるバグの説明として最も適切なものを選んでください。\",\"code\":\"const arr = [10, 20, 30];\\nfor (let i = 0; i <= arr.length; i++) {\\n  console.log(arr[i].toFixed(1));\\n}\",\"code_language\":\"javascript\",\"choices\":[{\"key\":\"a\",\"text\":\"i <= arr.length により末尾で undefined を参照し例外になる\"},{\"key\":\"b\",\"text\":\"toFixed は数値に使えないため必ず失敗する\"},{\"key\":\"c\",\"text\":\"let ではなく var を使うべきである\"},{\"key\":\"d\",\"text\":\"console.log は配列に使えない\"}],\"correct_keys\":[\"z\"],\"explanation\":\"条件が i <= arr.length なので i=3 のとき arr[3] は undefined になり、undefined.toFixed(1) で TypeError が投げられます。正しくは i < arr.length です。\",\"difficulty\":3,\"tags\":[\"off-by-one\",\"loop\"]}",
+    "model_id": "claude-haiku-4-5-20251001",
+    "usage": { "input_tokens": 655, "output_tokens": 240 }
+  },
+  "recorded_at": "2026-09-02T00:00:00Z"
+}

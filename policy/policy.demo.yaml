@@ -1,0 +1,23 @@
+# デモ用の小さなポリシー。E2E 確認（LOCAL_DEV.md §13 相当）で使う。
+#
+#   docker compose -f compose.yaml -f compose.lab.yaml run --rm \
+#     -e POLICY_PATH=policy/policy.demo.yaml pipeline generate
+#
+# 割当が 2 件に固定されるので、対応するカセット（testdata/cassettes/）だけで
+# replay モードでも完走する。
+
+version: 1
+
+batch:
+  max_new_per_run: 2
+
+target_distribution:
+  by_type:
+    code_reading: 0.5
+    output_prediction: 0.5
+  by_difficulty:
+    "2": 1.0
+
+languages: ["javascript"]
+
+skill_node_slugs: ["values-and-types"]

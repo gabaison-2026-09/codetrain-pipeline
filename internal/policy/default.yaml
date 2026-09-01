@@ -1,0 +1,17 @@
+version: 1
+batch:
+  max_new_per_run: 20          # 1 回の generate で新規登録する問題数の上限
+target_distribution:
+  by_type:                     # 合計 1.0 になるようにする
+    code_reading: 0.40
+    output_prediction: 0.40
+    bug_finding: 0.10
+    fill_in_blank: 0.10
+  by_difficulty:               # 難易度ごとの重み。合計 1.0
+    "1": 0.15
+    "2": 0.25
+    "3": 0.30
+    "4": 0.20
+    "5": 0.10
+languages: ["javascript", "typescript"]   # MVP は 1〜2 言語に絞る（OPEN_ISSUES C-1）
+skill_node_slugs: []           # 空 = published な skill_node 全体を対象。指定時はその slug 群に限定

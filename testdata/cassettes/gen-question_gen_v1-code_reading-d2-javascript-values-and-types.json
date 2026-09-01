@@ -1,0 +1,12 @@
+{
+  "key": "gen-question_gen.v1-code_reading-d2-javascript-values-and-types",
+  "prompt_version": "v1",
+  "model": "claude-haiku-4-5",
+  "temperature": 0.7,
+  "response": {
+    "text": "{\"type\":\"code_reading\",\"title\":\"型変換と比較\",\"body\":\"次のコードを読んで、変数 result に代入される値として正しいものを選んでください。\",\"code\":\"const a = '5';\\nconst b = 2;\\nconst result = a * b;\",\"code_language\":\"javascript\",\"choices\":[{\"key\":\"a\",\"text\":\"'52'\"},{\"key\":\"b\",\"text\":\"10\"},{\"key\":\"c\",\"text\":\"NaN\"},{\"key\":\"d\",\"text\":\"'10'\"}],\"correct_keys\":[\"b\"],\"explanation\":\"乗算演算子 * は文字列を数値に変換してから計算します。'5' は 5 に変換され、5 * 2 で 10（数値）になります。文字列連結が起きるのは + のときだけなので a は誤り、変換に失敗しないので c も誤り、結果は数値なので d も誤りです。\",\"difficulty\":2,\"tags\":[\"type-coercion\",\"operator\"]}",
+    "model_id": "claude-haiku-4-5-20251001",
+    "usage": { "input_tokens": 640, "output_tokens": 210 }
+  },
+  "recorded_at": "2026-09-02T00:00:00Z"
+}

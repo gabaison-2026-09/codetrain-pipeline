@@ -1,0 +1,26 @@
+# codetrain-pipeline ローカル開発用イメージ。
+#
+# LOCAL_DEV.md §1 / §6:
+#   Go はローカルでも必ずコンテナで動かす。pipeline は常駐サーバーではなく
+#   「サブコマンドを1回走らせて終わる」バッチのため air（ホットリロード）は入れない。
+#   実際にコンパイルする Go のバージョンを決めるのはこのベースイメージ。
+#   バージョンを上げるときは .go-version も同じ PR で更新する（REPOSITORIES.md §9.2）。
+#
+# ソースと隣の codetrain-core はバインドマウントされる（compose.lab.yaml）。
+# 使い方:
+#   docker compose -f compose.yaml -f compose.lab.yaml run --rm pipeline generate
+#   docker compose -f compose.yaml -f compose.lab.yaml run --rm pipeline regenerate
+FROM golang:1.27
+
+WORKDIR /workspace/codetrain-pipeline
+
+ENV GOFLAGS="-buildvcs=false"
+
+# psql は入れない。DB のスキーマを触るのは migrator（codetrain-core）の役目。
+# pipeline は行の読み書きだけを行う。
+#
+# エントリポイントは wrapper。サブコマンドは `go run ./cmd/pipeline` に、
+# それ以外（go test / gofmt / sh）はそのまま実行する（scripts/dev-entrypoint.sh）。
+COPY scripts/dev-entrypoint.sh /usr/local/bin/dev-entrypoint
+ENTRYPOINT ["dev-entrypoint"]
+CMD ["help"]

@@ -1,0 +1,13 @@
+{
+  "key": "regen-regenerate.v1-a0d4b24448c461e4",
+  "prompt_version": "regenerate.v1",
+  "model": "claude-haiku-4-5",
+  "temperature": 0.4,
+  "note": "デモ用。policy.demo.yaml で生成した code_reading/d2 の問題に対し、notes='選択肢dの日本語が不自然。全体的に表現を見直して' を付けたときのキー。",
+  "response": {
+    "text": "{\"type\":\"code_reading\",\"title\":\"文字列と数値の乗算\",\"body\":\"次のコードを読んで、変数 result に代入される値として正しいものを選んでください。\",\"code\":\"const a = '5';\\nconst b = 2;\\nconst result = a * b;\",\"code_language\":\"javascript\",\"choices\":[{\"key\":\"a\",\"text\":\"文字列 '52' になる\"},{\"key\":\"b\",\"text\":\"数値 10 になる\"},{\"key\":\"c\",\"text\":\"NaN になる\"},{\"key\":\"d\",\"text\":\"実行時エラーになる\"}],\"correct_keys\":[\"b\"],\"explanation\":\"乗算演算子 * は両辺を数値に変換してから計算します。'5' は 5 に変換され、5 * 2 で数値の 10 になります。文字列連結が起きるのは + 演算子のときだけなので a は誤り、数値変換に失敗しないので c と d も誤りです。\",\"difficulty\":2,\"tags\":[\"type-coercion\",\"operator\"]}",
+    "model_id": "claude-haiku-4-5-20251001",
+    "usage": { "input_tokens": 910, "output_tokens": 230 }
+  },
+  "recorded_at": "2026-09-02T00:00:00Z"
+}

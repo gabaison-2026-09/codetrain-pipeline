@@ -1,0 +1,23 @@
+# デモ用（異常系）。自動検証の不合格 → リトライ → 却下 → レポート記録 を確認する。
+#
+#   docker compose -f compose.yaml -f compose.lab.yaml run --rm \
+#     -e POLICY_PATH=policy/policy.demo-bad.yaml pipeline generate
+#
+# 対応するカセットは正解キーが choices に無い不正データなので、
+# GEN_MAX_RETRIES 回すべて validate で落ち、reports/<ts>/generate.json に
+# 却下理由と生の応答が残る（DB には登録されない）。
+
+version: 1
+
+batch:
+  max_new_per_run: 1
+
+target_distribution:
+  by_type:
+    bug_finding: 1.0
+  by_difficulty:
+    "3": 1.0
+
+languages: ["javascript"]
+
+skill_node_slugs: ["values-and-types"]
