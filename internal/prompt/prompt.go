@@ -81,7 +81,11 @@ func (t Template) systemFor(qType string) string {
 func (t Template) BuildGeneration(model string, a balancer.Assignment, cond seeds.Condition, priorIssues []string) llm.Request {
 	var b strings.Builder
 	fmt.Fprintf(&b, "問題タイプ: %s（%s）\n", a.Type, typeLabelJA(a.Type))
-	fmt.Fprintf(&b, "難易度: %d\n", a.Difficulty)
+	if brief := difficultyBriefJA(a.Difficulty); brief != "" {
+		fmt.Fprintf(&b, "難易度: %d / 5 — %s\n", a.Difficulty, brief)
+	} else {
+		fmt.Fprintf(&b, "難易度: %d\n", a.Difficulty)
+	}
 	fmt.Fprintf(&b, "対象言語: %s\n", a.Language)
 	if a.SkillNode.Name != "" {
 		fmt.Fprintf(&b, "対象トピック: %s — %s\n", a.SkillNode.Name, a.SkillNode.Description)
@@ -147,6 +151,24 @@ func writeIssues(b *strings.Builder, issues []string) {
 	for _, is := range issues {
 		fmt.Fprintf(b, "- %s\n", is)
 	}
+}
+
+// difficultyBriefJA は難易度値の 1 行サマリを返す（範囲外は空文字）。
+// 文面は templates/question_gen.v1.md の「難易度の基準（5 段階）」と揃える。
+func difficultyBriefJA(d int) string {
+	switch d {
+	case 1:
+		return "学習を始めたばかりでも解ける。単一の基本概念を素直に問う"
+	case 2:
+		return "基礎を一通り学んだ人向け。ありがちな誤解を 1 つ突き、結果への効き方まで踏み込む（頻出トリビア 1 つで終わらせない）"
+	case 3:
+		return "実務経験のある人向け。2 つの概念の相互作用、または一段の間接を問う"
+	case 4:
+		return "中堅以上でも一瞬迷う。仕様の細部・評価順序・スコープ・エッジケースが絡む"
+	case 5:
+		return "シニアでも引っかかりうる。マニアックな仕様や複数の落とし穴の合わせ技"
+	}
+	return ""
 }
 
 func typeLabelJA(t string) string {

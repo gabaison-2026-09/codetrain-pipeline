@@ -27,6 +27,12 @@ func TestBuildGenerationEmptyConditionKeepsLegacyCacheKey(t *testing.T) {
 	if strings.Contains(req.User, "作問の追加条件") {
 		t.Fatal("空 Condition なのにプロンプトへ条件ブロックが入っている")
 	}
+	if !strings.Contains(req.User, "難易度: 2 / 5 — ") {
+		t.Fatalf("User プロンプトに難易度サマリが無い:\n%s", req.User)
+	}
+	if !strings.Contains(req.System, "## 難易度の基準（5 段階）") {
+		t.Fatal("System に難易度ルーブリックが無い")
+	}
 }
 
 func TestBuildGenerationWithConditionAppendsFingerprintAndBlock(t *testing.T) {
