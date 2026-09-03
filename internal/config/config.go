@@ -74,7 +74,7 @@ func Load() (Config, error) {
 		AnthropicAPIKey:  env("ANTHROPIC_API_KEY", ""),
 		AnthropicModel:   env("ANTHROPIC_MODEL", "claude-haiku-4-5"),
 		AnthropicBaseURL: strings.TrimRight(env("ANTHROPIC_BASE_URL", "https://api.anthropic.com"), "/"),
-		BedrockModelID:   env("BEDROCK_MODEL_ID", "apac.anthropic.claude-haiku-4-5-20251001-v1:0"),
+		BedrockModelID:   env("BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0"),
 		CassetteDir:      env("CASSETTE_DIR", "testdata/cassettes"),
 		ManualDir:        env("MANUAL_DIR", "manual"),
 		PolicyPath:       env("POLICY_PATH", "policy/policy.yaml"),

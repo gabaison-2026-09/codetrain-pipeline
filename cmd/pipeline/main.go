@@ -227,7 +227,7 @@ func usage() {
   DATABASE_URL, LLM_MODE(replay|record|live|manual),
   LLM_PROVIDER(anthropic|bedrock。既定 bedrock。record/live のみ影響),
   ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_BASE_URL,
-  BEDROCK_MODEL_ID(既定 apac.anthropic.claude-haiku-4-5-20251001-v1:0), AWS_REGION,
+  BEDROCK_MODEL_ID(既定 jp.anthropic.claude-haiku-4-5-20251001-v1:0), AWS_REGION,
   CASSETTE_DIR, MANUAL_DIR, POLICY_PATH, GEN_MAX_RETRIES
 
 LLM_MODE=manual: 実 API を叩かず MANUAL_DIR（既定 manual/）へプロンプトを書き出す。
