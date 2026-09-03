@@ -72,6 +72,27 @@ key はカセットと同じ命名なので、良い返答が得られたら
 `testdata/cassettes/<key>.json` に整形して置けば `replay` で再利用できる。
 `regenerate` も同じ手順で動く。
 
+### Makefile で動かす（ローカル）
+
+Go はコンテナで動かすため、`Makefile` が `codetrain-devenv` の compose を呼ぶ。
+
+```bash
+# 前提（初回のみ）
+cd ../codetrain-devenv && cp -n .env.example .env && docker compose up -d
+cd ../codetrain-pipeline
+
+make manual-generate   # 1) manual/<key>.prompt.md を書き出す（DB 無変更）
+#  2) 各 prompt.md をブラウザの LLM に貼り、返答 JSON を manual/<key>.response.txt に保存
+make manual-generate   # 3) 検証 → DB 登録
+make questions          # 4) needs_review を確認
+
+make manual-smoke      # 2) をカセット流用で自動化し 1)〜4) を一括実行（完全オフライン）
+make manual-clean      # manual/ を掃除
+```
+
+ポリシーは `POLICY=policy/policy.demo-bad.yaml make manual-generate` のように差し替え可能。
+`make help` で全ターゲットを表示。
+
 ## ローカルでの動かし方
 
 `codetrain-devenv` が束ねる。横並びチェックアウト前提（`../codetrain-core` を参照）。
