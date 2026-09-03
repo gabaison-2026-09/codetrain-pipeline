@@ -50,7 +50,7 @@ admin（codetrain-admin → codetrain-api /v1/admin/*）でレビュー
 
 | `LLM_PROVIDER` | 向き先 | 認証 | モデル指定 |
 | --- | --- | --- | --- |
-| `bedrock`（**既定**） | Amazon Bedrock（`anthropic-sdk-go` の Bedrock backend） | AWS 認証情報チェーン（環境変数 / 共有 config / EKS Pod Identity / IRSA） | `BEDROCK_MODEL_ID`（既定 `apac.anthropic.claude-haiku-4-5-20251001-v1:0`）、リージョンは `AWS_REGION`（既定 `ap-northeast-1`） |
+| `bedrock`（**既定**） | Amazon Bedrock（`anthropic-sdk-go` の Bedrock backend） | AWS 認証情報チェーン（環境変数 / 共有 config / EKS Pod Identity / IRSA） | `BEDROCK_MODEL_ID`（既定 `jp.anthropic.claude-haiku-4-5-20251001-v1:0`）、リージョンは `AWS_REGION`（既定 `ap-northeast-1`） |
 | `anthropic` | Anthropic API 直（`net/http`） | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL`（既定 `claude-haiku-4-5`）、`ANTHROPIC_BASE_URL` |
 
 デプロイは Bedrock（Claude Haiku）で確定しているため既定は `bedrock`。ローカルで
