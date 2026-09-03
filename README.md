@@ -44,6 +44,34 @@ admin（codetrain-admin → codetrain-api /v1/admin/*）でレビュー
 `generate` / `regenerate` に `--allow-llm-calls` を付け `LLM_MODE=record|live` の
 ときだけ実 API を呼ぶ（環境変数にキーがあるだけでは課金しない。LOCAL_DEV.md §7.1）。
 
+## 手動 LLM モード（`LLM_MODE=manual`）
+
+Anthropic の API リソースを用意する前に、**LLM 呼び出しだけを人手で埋めて**
+「割当 → プロンプト成型 → JSON パース → 検証 → DB 登録 → review_queue」まで
+E2E で確認するためのモード。実 API は一切叩かない。API キー不要。
+
+```bash
+# 1. プロンプトを書き出す（DB は無変更、割当ごとに保留として記録される）
+LLM_MODE=manual POLICY_PATH=policy/policy.demo.yaml pipeline generate
+#   → manual/<key>.prompt.md が割当の数だけ生成される
+
+# 2. 各 manual/<key>.prompt.md の「--- SYSTEM ---」以降をブラウザの LLM に貼る
+
+# 3. 返ってきた JSON を、同じ key で manual/<key>.response.txt に保存する
+
+# 4. もう一度実行すると、返答ファイルがある割当だけ検証 → DB 登録まで進む
+LLM_MODE=manual POLICY_PATH=policy/policy.demo.yaml pipeline generate
+
+# 5. 登録を確認
+pipeline questions --status needs_review
+pipeline approve --id <uuid>
+```
+
+`MANUAL_DIR`（既定 `manual/`、`.gitignore` 対象）で出力先を変えられる。
+key はカセットと同じ命名なので、良い返答が得られたら
+`testdata/cassettes/<key>.json` に整形して置けば `replay` で再利用できる。
+`regenerate` も同じ手順で動く。
+
 ## ローカルでの動かし方
 
 `codetrain-devenv` が束ねる。横並びチェックアウト前提（`../codetrain-core` を参照）。
@@ -70,7 +98,7 @@ internal/
   balancer/               現状分布 + ポリシー → 生成割当（純関数・テスト可能）
   prompt/                 版付きテンプレート（templates/*.md を go:embed）
   schema/                 LLM 構造化出力の型 + JSON Schema + domain 変換
-  llm/                    Client インタフェース / Anthropic 直 / 記録再生 / factory
+  llm/                    Client インタフェース / Anthropic 直 / 記録再生 / 手動 / factory
   validate/               返答の吟味（構造化した不合格理由）
   generate/               生成ループ
   regenerate/             needs_edit の自動再生成ループ

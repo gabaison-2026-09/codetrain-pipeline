@@ -23,6 +23,10 @@ const (
 	LLMModeRecord LLMMode = "record"
 	// LLMModeLive は実 API を叩くが保存しない。
 	LLMModeLive LLMMode = "live"
+	// LLMModeManual は実 API を一切叩かず、プロンプト全文をファイルへ書き出す。
+	// 利用者がそれをブラウザの LLM に貼り、返答を <key>.response.txt に保存して
+	// 再実行すると、その返答を使って検証・DB 登録まで進む（API リソース未整備時の E2E 確認用）。
+	LLMModeManual LLMMode = "manual"
 )
 
 type Config struct {
@@ -33,6 +37,7 @@ type Config struct {
 	AnthropicModel   string
 	AnthropicBaseURL string
 	CassetteDir      string
+	ManualDir        string
 
 	PolicyPath    string
 	GenMaxRetries int
@@ -51,6 +56,7 @@ func Load() (Config, error) {
 		AnthropicModel:   env("ANTHROPIC_MODEL", "claude-haiku-4-5"),
 		AnthropicBaseURL: strings.TrimRight(env("ANTHROPIC_BASE_URL", "https://api.anthropic.com"), "/"),
 		CassetteDir:      env("CASSETTE_DIR", "testdata/cassettes"),
+		ManualDir:        env("MANUAL_DIR", "manual"),
 		PolicyPath:       env("POLICY_PATH", "policy/policy.yaml"),
 		GenMaxRetries:    envInt("GEN_MAX_RETRIES", 3),
 		AWSEndpointURL:   env("AWS_ENDPOINT_URL", ""),
@@ -62,9 +68,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("DATABASE_URL が設定されていません")
 	}
 	switch cfg.LLMMode {
-	case LLMModeReplay, LLMModeRecord, LLMModeLive:
+	case LLMModeReplay, LLMModeRecord, LLMModeLive, LLMModeManual:
 	default:
-		return Config{}, fmt.Errorf("LLM_MODE は replay / record / live のいずれかです: %q", cfg.LLMMode)
+		return Config{}, fmt.Errorf("LLM_MODE は replay / record / live / manual のいずれかです: %q", cfg.LLMMode)
 	}
 	if cfg.GenMaxRetries < 1 {
 		return Config{}, fmt.Errorf("GEN_MAX_RETRIES は 1 以上です: %d", cfg.GenMaxRetries)

@@ -75,12 +75,17 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 			last     llm.Response
 			draft    schema.QuestionDraft
 			accepted bool
+			pending  bool
 			attempt  int
 		)
 		for attempt = 1; attempt <= opts.MaxRetries; attempt++ {
 			req := tmpl.BuildRegeneration(opts.Model, keyID, currentJSON, t.Notes, validate.Strings(issues))
 			resp, err := d.Client.Generate(ctx, req)
 			if err != nil {
+				if llm.IsManualPending(err) {
+					pending = true
+					break
+				}
 				issues = []validate.Issue{{Field: "llm", Reason: err.Error()}}
 				break
 			}
@@ -106,6 +111,12 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 			QuestionID: t.Current.ID,
 			Attempts:   attempt,
 			ModelID:    modelID(last, opts.Model),
+		}
+		if pending {
+			item.Pending = true
+			run.Add(item)
+			slog.Info("プロンプト待ち（manual）", "question_id", t.Current.ID)
+			continue
 		}
 		if !accepted {
 			item.Accepted = false

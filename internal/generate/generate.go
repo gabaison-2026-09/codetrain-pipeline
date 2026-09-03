@@ -79,12 +79,19 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 			continue
 		}
 
-		draft, resp, attempts, issues, ok := attemptOne(ctx, d.Client, tmpl, opts.Model, a, opts.MaxRetries, vopts)
+		draft, resp, attempts, issues, ok, pending := attemptOne(ctx, d.Client, tmpl, opts.Model, a, opts.MaxRetries, vopts)
 
 		item := report.Item{
 			Assignment: a,
 			Attempts:   attempts,
 			ModelID:    modelID(resp, opts.Model),
+		}
+		if pending {
+			item.Pending = true
+			run.Add(item)
+			slog.Info("プロンプト待ち（manual）", "type", a.Type, "difficulty", a.Difficulty,
+				"language", a.Language, "skill_node", a.SkillNode.Slug)
+			continue
 		}
 		if !ok {
 			item.Accepted = false
@@ -133,14 +140,17 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 func attemptOne(
 	ctx context.Context, client llm.Client, tmpl prompt.Template, model string,
 	a balancer.Assignment, maxRetries int, vopts validate.Options,
-) (draft schema.QuestionDraft, last llm.Response, attempts int, issues []validate.Issue, ok bool) {
+) (draft schema.QuestionDraft, last llm.Response, attempts int, issues []validate.Issue, ok, pending bool) {
 
 	for attempts = 1; attempts <= maxRetries; attempts++ {
 		req := tmpl.BuildGeneration(model, a, validate.Strings(issues))
 		resp, err := client.Generate(ctx, req)
 		if err != nil {
+			if llm.IsManualPending(err) {
+				return draft, resp, attempts, nil, false, true
+			}
 			issues = []validate.Issue{{Field: "llm", Reason: err.Error()}}
-			return draft, resp, attempts, issues, false
+			return draft, resp, attempts, issues, false, false
 		}
 		last = resp
 
@@ -153,10 +163,10 @@ func attemptOne(
 			issues = v
 			continue
 		}
-		return d, resp, attempts, nil, true
+		return d, resp, attempts, nil, true, false
 	}
 	attempts = maxRetries
-	return draft, last, attempts, issues, false
+	return draft, last, attempts, issues, false, false
 }
 
 func modelID(r llm.Response, fallback string) string {
