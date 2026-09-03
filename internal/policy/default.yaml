@@ -3,10 +3,11 @@ batch:
   max_new_per_run: 20          # 1 回の generate で新規登録する問題数の上限
 target_distribution:
   by_type:                     # 合計 1.0 になるようにする
-    code_reading: 0.40
-    output_prediction: 0.40
+    code_reading: 0.35
+    output_prediction: 0.35
     bug_finding: 0.10
     fill_in_blank: 0.10
+    best_practice: 0.10
   by_difficulty:               # 難易度ごとの重み。合計 1.0
     "1": 0.15
     "2": 0.25
@@ -15,3 +16,9 @@ target_distribution:
     "5": 0.10
 languages: ["javascript", "typescript"]   # MVP は 1〜2 言語に絞る（OPEN_ISSUES C-1）
 skill_node_slugs: []           # 空 = published な skill_node 全体を対象。指定時はその slug 群に限定
+diversity:                     # 作問条件のランダム付与（internal/seeds のカタログから抽選）
+  enabled: false               # true で有効化。false の間はプロンプト・CacheKey とも従来どおり
+  per_prompt:                  # 1 プロンプトあたり各カテゴリから何件絡めるか
+    methods: 1
+    patterns: 1
+    spec_topics: 1

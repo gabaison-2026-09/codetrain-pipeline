@@ -78,6 +78,7 @@ func cmdGenerate(ctx context.Context, args []string) error {
 	maxRetries := fs.Int("max-retries", 0, "生成の再試行上限（0 なら GEN_MAX_RETRIES）")
 	reportsDir := fs.String("reports-dir", "reports", "実行レポートの出力先")
 	dryRun := fs.Bool("dry-run", false, "LLM 呼び出しも DB 書き込みもせず、割当と依頼キーだけを出力する")
+	seed := fs.Int64("seed", 0, "作問条件のランダム抽選シード（0 なら実行時刻から導出。policy.diversity 有効時のみ使用）")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -88,21 +89,23 @@ func cmdGenerate(ctx context.Context, args []string) error {
 	}
 	defer cleanup()
 
-	client, err := a.LLM(*allow)
+	client, err := a.LLM(ctx, *allow)
 	if err != nil {
 		return err
 	}
-	slog.Info("generate を開始", "llm_mode", client.Mode(), "model", a.Cfg.AnthropicModel)
+	slog.Info("generate を開始", "llm_mode", client.Mode(),
+		"llm_provider", a.Cfg.LLMProvider, "model", a.Cfg.ModelID())
 
 	rt := *maxRetries
 	if rt == 0 {
 		rt = a.Cfg.GenMaxRetries
 	}
 	rep, err := generate.Run(ctx, generate.Deps{Repo: a.Repo, Client: client, Policy: a.Policy}, generate.Options{
-		Model:      a.Cfg.AnthropicModel,
+		Model:      a.Cfg.ModelID(),
 		MaxRetries: rt,
 		ReportsDir: *reportsDir,
 		DryRun:     *dryRun,
+		Seed:       *seed,
 	})
 	if err != nil {
 		return err
@@ -128,18 +131,19 @@ func cmdRegenerate(ctx context.Context, args []string) error {
 	}
 	defer cleanup()
 
-	client, err := a.LLM(*allow)
+	client, err := a.LLM(ctx, *allow)
 	if err != nil {
 		return err
 	}
-	slog.Info("regenerate を開始", "llm_mode", client.Mode())
+	slog.Info("regenerate を開始", "llm_mode", client.Mode(),
+		"llm_provider", a.Cfg.LLMProvider, "model", a.Cfg.ModelID())
 
 	rt := *maxRetries
 	if rt == 0 {
 		rt = a.Cfg.GenMaxRetries
 	}
 	rep, err := regenerate.Run(ctx, regenerate.Deps{Repo: a.Repo, Client: client, Policy: a.Policy}, regenerate.Options{
-		Model:      a.Cfg.AnthropicModel,
+		Model:      a.Cfg.ModelID(),
 		MaxRetries: rt,
 		Limit:      *limit,
 		ReportsDir: *reportsDir,
@@ -220,7 +224,14 @@ func usage() {
   help          このヘルプ
 
 主な環境変数:
-  DATABASE_URL, LLM_MODE(replay|record|live), ANTHROPIC_API_KEY,
-  ANTHROPIC_MODEL, ANTHROPIC_BASE_URL, CASSETTE_DIR, POLICY_PATH, GEN_MAX_RETRIES
+  DATABASE_URL, LLM_MODE(replay|record|live|manual),
+  LLM_PROVIDER(anthropic|bedrock。既定 bedrock。record/live のみ影響),
+  ANTHROPIC_API_KEY, ANTHROPIC_MODEL, ANTHROPIC_BASE_URL,
+  BEDROCK_MODEL_ID(既定 jp.anthropic.claude-haiku-4-5-20251001-v1:0), AWS_REGION,
+  CASSETTE_DIR, MANUAL_DIR, POLICY_PATH, GEN_MAX_RETRIES
+
+LLM_MODE=manual: 実 API を叩かず MANUAL_DIR（既定 manual/）へプロンプトを書き出す。
+  内容をブラウザの LLM に貼り、返答 JSON を <key>.response.txt に保存して再実行すると
+  検証・DB 登録まで進む（API リソース未整備時の E2E 確認用）。
 `)
 }

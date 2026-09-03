@@ -8,7 +8,11 @@ import (
 )
 
 func TestReplayNeedsNoKey(t *testing.T) {
-	c, err := New(config.Config{LLMMode: config.LLMModeReplay, CassetteDir: t.TempDir()}, false)
+	c, err := New(context.Background(), config.Config{
+		LLMMode:     config.LLMModeReplay,
+		LLMProvider: config.LLMProviderBedrock,
+		CassetteDir: t.TempDir(),
+	}, false)
 	if err != nil {
 		t.Fatalf("replay の組み立てに失敗: %v", err)
 	}
@@ -22,13 +26,31 @@ func TestReplayNeedsNoKey(t *testing.T) {
 }
 
 func TestRecordRequiresFlagAndKey(t *testing.T) {
-	// フラグ無し
-	if _, err := New(config.Config{LLMMode: config.LLMModeRecord, AnthropicAPIKey: "k"}, false); err == nil {
+	// anthropic プロバイダ: フラグ無し
+	if _, err := New(context.Background(), config.Config{
+		LLMMode:         config.LLMModeRecord,
+		LLMProvider:     config.LLMProviderAnthropic,
+		AnthropicAPIKey: "k",
+	}, false); err == nil {
 		t.Fatal("--allow-llm-calls 無しで record が通った")
 	}
-	// キー無し
-	if _, err := New(config.Config{LLMMode: config.LLMModeLive}, true); err == nil {
-		t.Fatal("API キー無しで live が通った")
+	// anthropic プロバイダ: キー無し
+	if _, err := New(context.Background(), config.Config{
+		LLMMode:     config.LLMModeLive,
+		LLMProvider: config.LLMProviderAnthropic,
+	}, true); err == nil {
+		t.Fatal("API キー無しで live（anthropic）が通った")
+	}
+}
+
+func TestRecordBedrockDoubleLock(t *testing.T) {
+	// bedrock でも --allow-llm-calls の二重ロックは効く。
+	if _, err := New(context.Background(), config.Config{
+		LLMMode:     config.LLMModeRecord,
+		LLMProvider: config.LLMProviderBedrock,
+		CassetteDir: t.TempDir(),
+	}, false); err == nil {
+		t.Fatal("--allow-llm-calls 無しで record（bedrock）が通った")
 	}
 }
 

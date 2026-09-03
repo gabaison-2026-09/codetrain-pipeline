@@ -2,7 +2,9 @@
 // 割当条件やレビュー指摘を差し込んで llm.Request を組み立てる。
 //
 // テンプレートは internal/prompt/templates/*.md に置き go:embed で焼き込む。
-// System（静的プレフィックス。指示文 + JSON Schema + 例）は全生成で共通なので
+// question_gen.v1.md が全種別共通のベース（指示文 + JSON Schema）で、
+// 種別ごとの作問方針・例は templates/types/<type>.v1.md に分割する。
+// System = ベース + その種別のガイド。ベース部分は全生成で共通なので
 // 将来プロンプトキャッシュのブレークポイントになる（DESIGN.md §7.1）。
 package prompt
 
@@ -14,15 +16,24 @@ import (
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/balancer"
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/llm"
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/schema"
+	"github.com/gabaison-2026-09/codetrain-pipeline/internal/seeds"
 )
 
-//go:embed templates/*.md
+//go:embed templates/*.md templates/types/*.md
 var templatesFS embed.FS
+
+// knownTypes は種別ガイドを読み込む question_type の一覧。
+// codetrain-core の domain.QuestionType と対応する。
+var knownTypes = []string{
+	"code_reading", "output_prediction", "bug_finding", "fill_in_blank", "best_practice",
+}
 
 // Template は 1 つのプロンプト版。
 type Template struct {
 	Version string
-	System  string
+	System  string // 共通ベース（{{SCHEMA}} 展開済み）
+
+	typeGuides map[string]string // question_type -> 種別ガイド本文
 }
 
 var (
@@ -42,17 +53,46 @@ func mustLoad(path, version string) Template {
 		panic(fmt.Sprintf("prompt: テンプレート %s の読み込みに失敗: %v", path, err))
 	}
 	sys := strings.ReplaceAll(string(b), "{{SCHEMA}}", schema.JSONSchema)
-	return Template{Version: version, System: sys}
+
+	guides := make(map[string]string, len(knownTypes))
+	for _, t := range knownTypes {
+		gp := "templates/types/" + t + ".v1.md"
+		gb, err := templatesFS.ReadFile(gp)
+		if err != nil {
+			panic(fmt.Sprintf("prompt: 種別ガイド %s の読み込みに失敗: %v", gp, err))
+		}
+		guides[t] = strings.TrimRight(string(gb), "\n")
+	}
+
+	return Template{Version: version, System: sys, typeGuides: guides}
 }
 
-// BuildGeneration は割当条件（＋前回の不合格理由）から生成依頼を組み立てる。
-func (t Template) BuildGeneration(model string, a balancer.Assignment, priorIssues []string) llm.Request {
+// systemFor は共通ベースに種別ガイドを連結した System を返す。
+// 未知の種別ではベースのみ返す。
+func (t Template) systemFor(qType string) string {
+	g, ok := t.typeGuides[qType]
+	if !ok {
+		return t.System
+	}
+	return t.System + "\n\n## この問題タイプについて\n\n" + g + "\n"
+}
+
+// BuildGeneration は割当条件（＋作問条件＋前回の不合格理由）から生成依頼を組み立てる。
+func (t Template) BuildGeneration(model string, a balancer.Assignment, cond seeds.Condition, priorIssues []string) llm.Request {
 	var b strings.Builder
 	fmt.Fprintf(&b, "問題タイプ: %s（%s）\n", a.Type, typeLabelJA(a.Type))
-	fmt.Fprintf(&b, "難易度: %d\n", a.Difficulty)
+	if brief := difficultyBriefJA(a.Difficulty); brief != "" {
+		fmt.Fprintf(&b, "難易度: %d / 5 — %s\n", a.Difficulty, brief)
+	} else {
+		fmt.Fprintf(&b, "難易度: %d\n", a.Difficulty)
+	}
 	fmt.Fprintf(&b, "対象言語: %s\n", a.Language)
 	if a.SkillNode.Name != "" {
 		fmt.Fprintf(&b, "対象トピック: %s — %s\n", a.SkillNode.Name, a.SkillNode.Description)
+	}
+	if block := cond.PromptBlock(); block != "" {
+		b.WriteString("\n")
+		b.WriteString(block)
 	}
 	b.WriteString("\n上記の条件で問題を 1 問作成してください。\n")
 	writeIssues(&b, priorIssues)
@@ -61,20 +101,24 @@ func (t Template) BuildGeneration(model string, a balancer.Assignment, priorIssu
 	if slug == "" {
 		slug = "none"
 	}
+	cacheKey := fmt.Sprintf("gen-%s-%s-d%d-%s-%s", t.Version, a.Type, a.Difficulty, a.Language, slug)
+	if fp := cond.Fingerprint(); fp != "" {
+		cacheKey += "-" + fp
+	}
 	return llm.Request{
 		Model:         model,
 		PromptVersion: t.Version,
-		System:        t.System,
+		System:        t.systemFor(a.Type),
 		User:          b.String(),
 		MaxTokens:     2048,
 		Temperature:   0.7,
-		CacheKey:      fmt.Sprintf("gen-%s-%s-d%d-%s-%s", t.Version, a.Type, a.Difficulty, a.Language, slug),
+		CacheKey:      cacheKey,
 	}
 }
 
 // BuildRegeneration は現在の問題 JSON・レビュー指摘・自動検証の不合格理由から
-// 再生成依頼を組み立てる。
-func (t Template) BuildRegeneration(model, keyID, currentJSON, reviewerNotes string, priorIssues []string) llm.Request {
+// 再生成依頼を組み立てる。qType は元の問題の種別（種別ガイドの選択に使う）。
+func (t Template) BuildRegeneration(model, keyID, qType, currentJSON, reviewerNotes string, priorIssues []string) llm.Request {
 	var b strings.Builder
 	b.WriteString("## 現在の問題（JSON）\n")
 	b.WriteString(currentJSON)
@@ -91,7 +135,7 @@ func (t Template) BuildRegeneration(model, keyID, currentJSON, reviewerNotes str
 	return llm.Request{
 		Model:         model,
 		PromptVersion: t.Version,
-		System:        t.System,
+		System:        t.systemFor(qType),
 		User:          b.String(),
 		MaxTokens:     2048,
 		Temperature:   0.4,
@@ -107,6 +151,24 @@ func writeIssues(b *strings.Builder, issues []string) {
 	for _, is := range issues {
 		fmt.Fprintf(b, "- %s\n", is)
 	}
+}
+
+// difficultyBriefJA は難易度値の 1 行サマリを返す（範囲外は空文字）。
+// 文面は templates/question_gen.v1.md の「難易度の基準（5 段階）」と揃える。
+func difficultyBriefJA(d int) string {
+	switch d {
+	case 1:
+		return "学習を始めたばかりでも解ける。単一の基本概念を素直に問う"
+	case 2:
+		return "基礎を一通り学んだ人向け。ありがちな誤解を 1 つ突き、結果への効き方まで踏み込む（頻出トリビア 1 つで終わらせない）"
+	case 3:
+		return "実務経験のある人向け。2 つの概念の相互作用、または一段の間接を問う"
+	case 4:
+		return "中堅以上でも一瞬迷う。仕様の細部・評価順序・スコープ・エッジケースが絡む"
+	case 5:
+		return "シニアでも引っかかりうる。マニアックな仕様や複数の落とし穴の合わせ技"
+	}
+	return ""
 }
 
 func typeLabelJA(t string) string {

@@ -17,10 +17,14 @@ type Run struct {
 	Command   string    `json:"command"`
 	StartedAt time.Time `json:"started_at"`
 	EndedAt   time.Time `json:"ended_at"`
-	Planned   int       `json:"planned"`
-	Accepted  int       `json:"accepted"`
-	Rejected  int       `json:"rejected"`
-	Items     []Item    `json:"items"`
+	// Seed は作問条件のランダム抽選に使ったシード。0 以外なら --seed で固定するか
+	// StartedAt から導出した値。同じ seed + policy で再実行すると条件が再現する。
+	Seed     int64  `json:"seed,omitempty"`
+	Planned  int    `json:"planned"`
+	Accepted int    `json:"accepted"`
+	Rejected int    `json:"rejected"`
+	Pending  int    `json:"pending"` // LLM_MODE=manual でプロンプト待ちの件数
+	Items    []Item `json:"items"`
 }
 
 // Item は 1 問分の結果。
@@ -28,7 +32,9 @@ type Item struct {
 	Assignment  any      `json:"assignment,omitempty"`
 	QuestionID  string   `json:"question_id,omitempty"`
 	Accepted    bool     `json:"accepted"`
+	Pending     bool     `json:"pending,omitempty"` // manual モードでプロンプト待ち
 	Attempts    int      `json:"attempts"`
+	Conditions  []string `json:"conditions,omitempty"` // 付与した作問条件（diversity 有効時）
 	Issues      []string `json:"issues,omitempty"`
 	TokensTotal int      `json:"tokens_total,omitempty"`
 	ModelID     string   `json:"model_id,omitempty"`
@@ -42,9 +48,12 @@ func New(command string) *Run {
 
 func (r *Run) Add(it Item) {
 	r.Items = append(r.Items, it)
-	if it.Accepted {
+	switch {
+	case it.Pending:
+		r.Pending++
+	case it.Accepted:
 		r.Accepted++
-	} else {
+	default:
 		r.Rejected++
 	}
 }
@@ -72,5 +81,9 @@ func (r *Run) Write(dir string) (string, error) {
 
 // Summary は 1 行サマリ（ログ用）。
 func (r *Run) Summary() string {
+	if r.Pending > 0 {
+		return fmt.Sprintf("計画 %d 件 / 合格 %d 件 / 却下 %d 件 / 保留 %d 件",
+			r.Planned, r.Accepted, r.Rejected, r.Pending)
+	}
 	return fmt.Sprintf("計画 %d 件 / 合格 %d 件 / 却下 %d 件", r.Planned, r.Accepted, r.Rejected)
 }
