@@ -14,6 +14,9 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/balancer"
@@ -23,6 +26,7 @@ import (
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/report"
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/repository"
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/schema"
+	"github.com/gabaison-2026-09/codetrain-pipeline/internal/seeds"
 	"github.com/gabaison-2026-09/codetrain-pipeline/internal/validate"
 )
 
@@ -31,7 +35,8 @@ type Options struct {
 	Model      string
 	MaxRetries int
 	ReportsDir string
-	DryRun     bool // LLM 呼び出しも DB 書き込みもせず、割当と依頼キーだけを出力する
+	DryRun     bool  // LLM 呼び出しも DB 書き込みもせず、割当と依頼キーだけを出力する
+	Seed       int64 // 作問条件のランダム抽選シード。0 なら実行時刻から導出する
 }
 
 // Deps は Run の依存。
@@ -65,26 +70,71 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 	run.Planned = len(plan)
 	slog.Info("生成計画を作成", "assignments", len(plan))
 
+	// 作問条件のランダム付与（policy.diversity.enabled のときだけ）。
+	div := d.Policy.Diversity
+	var catalog seeds.Catalog
+	if div.Enabled {
+		catalog, err = seeds.Load()
+		if err != nil {
+			return nil, fmt.Errorf("作問条件カタログの読み込みに失敗: %w", err)
+		}
+		run.Seed = opts.Seed
+		if run.Seed == 0 {
+			run.Seed = run.StartedAt.UnixNano()
+		}
+		slog.Info("作問条件のランダム付与を有効化", "seed", run.Seed)
+	}
+	pickConditions := func(i int, lang string) seeds.Condition {
+		if !div.Enabled {
+			return seeds.Condition{}
+		}
+		rng := rand.New(rand.NewSource(run.Seed + int64(i)))
+		return catalog.Pick(lang, seeds.Counts{
+			Methods:    div.PerPrompt.Methods,
+			Patterns:   div.PerPrompt.Patterns,
+			SpecTopics: div.PerPrompt.SpecTopics,
+		}, rng)
+	}
+
 	tmpl := prompt.Generation()
 	vopts := validate.Options{
 		AllowedLanguages: d.Policy.Languages,
 		ExistingCorpus:   corpus,
 	}
 
-	for _, a := range plan {
+	// dry-run では LLM へ投げる直前のプロンプト（中間生成物）を書き出す。
+	var promptsDir string
+	if opts.DryRun {
+		promptsDir = filepath.Join(opts.ReportsDir, run.StartedAt.Format("20060102-150405"), "prompts")
+		if err := os.MkdirAll(promptsDir, 0o755); err != nil {
+			return nil, fmt.Errorf("プロンプト書き出し先の作成に失敗: %w", err)
+		}
+	}
+
+	for i, a := range plan {
+		cond := pickConditions(i, a.Language)
+
 		if opts.DryRun {
-			req := tmpl.BuildGeneration(opts.Model, a, nil)
+			req := tmpl.BuildGeneration(opts.Model, a, cond, nil)
+			path := filepath.Join(promptsDir, llm.PromptKey(req)+".md")
+			if err := os.WriteFile(path, []byte(llm.RenderPromptFile(req)), 0o644); err != nil {
+				return nil, fmt.Errorf("プロンプトの書き出しに失敗 (%s): %w", path, err)
+			}
 			slog.Info("dry-run", "type", a.Type, "difficulty", a.Difficulty,
-				"language", a.Language, "skill_node", a.SkillNode.Slug, "cache_key", req.CacheKey)
+				"language", a.Language, "skill_node", a.SkillNode.Slug,
+				"cache_key", req.CacheKey, "prompt", path)
 			continue
 		}
 
-		draft, resp, attempts, issues, ok, pending := attemptOne(ctx, d.Client, tmpl, opts.Model, a, opts.MaxRetries, vopts)
+		draft, resp, attempts, issues, ok, pending := attemptOne(ctx, d.Client, tmpl, opts.Model, a, cond, opts.MaxRetries, vopts)
 
 		item := report.Item{
 			Assignment: a,
 			Attempts:   attempts,
 			ModelID:    modelID(resp, opts.Model),
+		}
+		if labels := cond.Labels(); len(labels) > 0 {
+			item.Conditions = labels
 		}
 		if pending {
 			item.Pending = true
@@ -124,6 +174,7 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 	}
 
 	if opts.DryRun {
+		slog.Info("dry-run 完了。プロンプトを書き出しました", "dir", promptsDir, "count", len(plan))
 		return run, nil
 	}
 
@@ -139,11 +190,11 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 // attemptOne は 1 つの割当について、合格するまで（or 上限まで）生成を試みる。
 func attemptOne(
 	ctx context.Context, client llm.Client, tmpl prompt.Template, model string,
-	a balancer.Assignment, maxRetries int, vopts validate.Options,
+	a balancer.Assignment, cond seeds.Condition, maxRetries int, vopts validate.Options,
 ) (draft schema.QuestionDraft, last llm.Response, attempts int, issues []validate.Issue, ok, pending bool) {
 
 	for attempts = 1; attempts <= maxRetries; attempts++ {
-		req := tmpl.BuildGeneration(model, a, validate.Strings(issues))
+		req := tmpl.BuildGeneration(model, a, cond, validate.Strings(issues))
 		resp, err := client.Generate(ctx, req)
 		if err != nil {
 			if llm.IsManualPending(err) {

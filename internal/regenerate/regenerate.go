@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/gabaison-2026-09/codetrain-core/pkg/domain"
@@ -59,13 +61,25 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 	tmpl := prompt.Regeneration()
 	vopts := validate.Options{AllowedLanguages: d.Policy.Languages}
 
+	var promptsDir string
+	if opts.DryRun {
+		promptsDir = filepath.Join(opts.ReportsDir, run.StartedAt.Format("20060102-150405"), "prompts")
+		if err := os.MkdirAll(promptsDir, 0o755); err != nil {
+			return nil, fmt.Errorf("プロンプト書き出し先の作成に失敗: %w", err)
+		}
+	}
+
 	for _, t := range targets {
 		currentJSON := marshalCurrent(t.Current)
 		keyID := shortHash(currentJSON + "\x00" + t.Notes)
 
 		if opts.DryRun {
-			req := tmpl.BuildRegeneration(opts.Model, keyID, currentJSON, t.Notes, nil)
-			slog.Info("dry-run", "question_id", t.Current.ID, "cache_key", req.CacheKey)
+			req := tmpl.BuildRegeneration(opts.Model, keyID, string(t.Current.Type), currentJSON, t.Notes, nil)
+			path := filepath.Join(promptsDir, llm.PromptKey(req)+".md")
+			if err := os.WriteFile(path, []byte(llm.RenderPromptFile(req)), 0o644); err != nil {
+				return nil, fmt.Errorf("プロンプトの書き出しに失敗 (%s): %w", path, err)
+			}
+			slog.Info("dry-run", "question_id", t.Current.ID, "cache_key", req.CacheKey, "prompt", path)
 			run.Add(report.Item{QuestionID: t.Current.ID, Accepted: false})
 			continue
 		}
@@ -79,7 +93,7 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 			attempt  int
 		)
 		for attempt = 1; attempt <= opts.MaxRetries; attempt++ {
-			req := tmpl.BuildRegeneration(opts.Model, keyID, currentJSON, t.Notes, validate.Strings(issues))
+			req := tmpl.BuildRegeneration(opts.Model, keyID, string(t.Current.Type), currentJSON, t.Notes, validate.Strings(issues))
 			resp, err := d.Client.Generate(ctx, req)
 			if err != nil {
 				if llm.IsManualPending(err) {
@@ -149,6 +163,9 @@ func Run(ctx context.Context, d Deps, opts Options) (*report.Run, error) {
 	}
 
 	if opts.DryRun {
+		if promptsDir != "" {
+			slog.Info("dry-run 完了。プロンプトを書き出しました", "dir", promptsDir, "count", len(targets))
+		}
 		return run, nil
 	}
 	if path, err := run.Write(opts.ReportsDir); err == nil {

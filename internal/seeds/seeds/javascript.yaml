@@ -1,0 +1,41 @@
+language: javascript
+
+methods:
+  - "Array.prototype.map"
+  - "Array.prototype.filter"
+  - "Array.prototype.reduce"
+  - "Array.prototype.forEach"
+  - "Array.prototype.find"
+  - "Array.prototype.some / every"
+  - "Array.prototype.flatMap"
+  - "Array.prototype.sort"
+  - "Array.prototype.slice / splice"
+  - "Object.keys / values / entries"
+  - "Object.assign"
+  - "Object.freeze"
+  - "JSON.parse / JSON.stringify"
+  - "Promise.all"
+  - "Promise.allSettled"
+  - "Promise.race"
+  - "Array.from"
+  - "String.prototype.split / join"
+  - "String.prototype.replace / replaceAll"
+  - "Map / Set"
+  - "structuredClone"
+
+patterns:
+  - "Promise を async/await に書き換える"
+  - "分割代入でデフォルト値を与える"
+  - "スプレッド構文で配列・オブジェクトを合成する"
+  - "オプショナルチェーン（?.）で安全にアクセスする"
+  - "配列を Map に変換して O(1) 参照にする"
+
+spec_topics:
+  - "== と === の型強制"
+  - "イベントループとマイクロタスク（Promise vs setTimeout）"
+  - "NaN と Number の比較"
+  - "浮動小数（0.1 + 0.2）の丸め誤差"
+  - "巻き上げ（hoisting）と let / const の TDZ"
+  - "クロージャが参照する変数の共有"
+  - "this の束縛とアロー関数"
+  - "配列の空要素（sparse array）の扱い"

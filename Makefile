@@ -7,6 +7,10 @@
 #   cd ../codetrain-devenv && cp -n .env.example .env && docker compose up -d
 #     → Track B（postgres / マイグレーション / シード）が立ち上がる
 #
+# プロンプトの中身だけ見たいとき:
+#   make dump-prompts        # reports/<ts>/prompts/*.md に System+User を書き出す（LLM 呼ばない）
+#   make dump-prompts SEED=42 POLICY=policy/policy.yaml
+#
 # LLM_MODE=manual の使い方:
 #   make manual-generate     # 1) manual/<key>.prompt.md を書き出す（DB は無変更）
 #   #  2) 各 prompt.md の「--- SYSTEM ---」以降をブラウザの LLM に貼る
@@ -24,6 +28,7 @@ COMPOSE     = docker compose -f $(DEVENV)/compose.yaml -f $(DEVENV)/compose.lab.
 RUN         = $(COMPOSE) run --rm
 POLICY     ?= policy/policy.demo.yaml
 MANUAL_DIR ?= manual
+SEED       ?= 0
 MANUAL_ENV  = -e LLM_MODE=manual -e MANUAL_DIR=$(MANUAL_DIR)
 
 .PHONY: help
@@ -32,7 +37,16 @@ help: ## このヘルプを表示
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 	@echo
 	@echo "  前提: cd ../codetrain-devenv && cp -n .env.example .env && docker compose up -d"
-	@echo "  変数: POLICY=$(POLICY)  MANUAL_DIR=$(MANUAL_DIR)"
+	@echo "  変数: POLICY=$(POLICY)  MANUAL_DIR=$(MANUAL_DIR)  SEED=$(SEED)"
+
+.PHONY: dump-prompts
+dump-prompts: ## LLM へ投げる直前のプロンプト（中間生成物）を reports/<ts>/prompts/ に書き出す（generate --dry-run。LLM・DB書込なし）
+	$(RUN) -e POLICY_PATH=$(POLICY) pipeline generate --dry-run --seed $(SEED)
+	@echo "→ reports/<最新のタイムスタンプ>/prompts/*.md を確認してください"
+
+.PHONY: dump-regen-prompts
+dump-regen-prompts: ## needs_edit の再生成プロンプトを reports/<ts>/prompts/ に書き出す（regenerate --dry-run）
+	$(RUN) -e POLICY_PATH=$(POLICY) pipeline regenerate --dry-run
 
 .PHONY: manual-generate
 manual-generate: ## LLM_MODE=manual で generate。1回目=プロンプト書き出し / 返答を置いて2回目=検証・DB登録

@@ -78,6 +78,7 @@ func cmdGenerate(ctx context.Context, args []string) error {
 	maxRetries := fs.Int("max-retries", 0, "生成の再試行上限（0 なら GEN_MAX_RETRIES）")
 	reportsDir := fs.String("reports-dir", "reports", "実行レポートの出力先")
 	dryRun := fs.Bool("dry-run", false, "LLM 呼び出しも DB 書き込みもせず、割当と依頼キーだけを出力する")
+	seed := fs.Int64("seed", 0, "作問条件のランダム抽選シード（0 なら実行時刻から導出。policy.diversity 有効時のみ使用）")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -103,6 +104,7 @@ func cmdGenerate(ctx context.Context, args []string) error {
 		MaxRetries: rt,
 		ReportsDir: *reportsDir,
 		DryRun:     *dryRun,
+		Seed:       *seed,
 	})
 	if err != nil {
 		return err

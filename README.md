@@ -44,6 +44,10 @@ admin（codetrain-admin → codetrain-api /v1/admin/*）でレビュー
 `generate` / `regenerate` に `--allow-llm-calls` を付け `LLM_MODE=record|live` の
 ときだけ実 API を呼ぶ（環境変数にキーがあるだけでは課金しない。LOCAL_DEV.md §7.1）。
 
+`--dry-run` は LLM 呼び出しも DB 書き込みもせず、**LLM へ投げる直前のプロンプト
+（中間生成物：System + User）** を `reports/<ts>/prompts/<key>.md` に書き出す
+（`LLM_MODE` は問わない。DB 接続は必要）。プロンプトの中身を確認したいときはこれが最短。
+
 ## 手動 LLM モード（`LLM_MODE=manual`）
 
 Anthropic の API リソースを用意する前に、**LLM 呼び出しだけを人手で埋めて**
@@ -88,6 +92,9 @@ make questions          # 4) needs_review を確認
 
 make manual-smoke      # 2) をカセット流用で自動化し 1)〜4) を一括実行（完全オフライン）
 make manual-clean      # manual/ を掃除
+
+make dump-prompts             # LLM へ投げる直前のプロンプトを reports/<ts>/prompts/*.md に書き出す
+make dump-prompts SEED=42 POLICY=policy/policy.yaml
 ```
 
 ポリシーは `POLICY=policy/policy.demo-bad.yaml make manual-generate` のように差し替え可能。
@@ -117,7 +124,8 @@ internal/
   config/                 環境変数
   policy/                 ポリシーの読み込み・検証（内蔵デフォルトあり）
   balancer/               現状分布 + ポリシー → 生成割当（純関数・テスト可能）
-  prompt/                 版付きテンプレート（templates/*.md を go:embed）
+  prompt/                 版付きテンプレート（共通ベース + templates/types/<type>.v1.md）
+  seeds/                  作問条件カタログ（seeds/*.yaml。多様性のランダム付与）
   schema/                 LLM 構造化出力の型 + JSON Schema + domain 変換
   llm/                    Client インタフェース / Anthropic 直 / 記録再生 / 手動 / factory
   validate/               返答の吟味（構造化した不合格理由）
@@ -127,6 +135,27 @@ internal/
   repository/             pgx。question 分布集計 / INSERT・UPDATE / review_queue
   report/                 実行レポート（reports/、Git 管理外）
 testdata/cassettes/       記録再生カセット（Git 管理。README 参照）
+```
+
+## プロンプト構成と多様性
+
+- **種別ごとのテンプレート**: `internal/prompt/templates/question_gen.v1.md` は
+  全種別共通のベース（指示文 + JSON Schema）。種別ごとの作問方針・出力例は
+  `internal/prompt/templates/types/<question_type>.v1.md` に分割してある。
+  `System = ベース + その種別のガイド`。種別を増やすときはこのファイルを 1 枚足す。
+- **作問条件のランダム付与**（`policy.diversity`、既定 OFF）: 有効にすると、
+  各プロンプトへ `internal/seeds/seeds/*.yaml` から「絡める API・メソッド」
+  「題材の処理」「解説で触れる観点」を抽選して添える。抽選は `generate --seed`
+  （未指定なら実行時刻由来）で決定的になり、採用シードと条件は実行レポートに残る。
+  同じ seed + policy で再実行すれば同じ条件になり、`CacheKey` にも条件の
+  フィンガープリントが付く（＝カセット再生も再現可能）。
+  `enabled: false` の間はプロンプト本文も `CacheKey` も従来と完全一致する。
+
+```yaml
+# policy.yaml
+diversity:
+  enabled: true
+  per_prompt: { methods: 1, patterns: 1, spec_topics: 1 }
 ```
 
 ## 本番（TODO）

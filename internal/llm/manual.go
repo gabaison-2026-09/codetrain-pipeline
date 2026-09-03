@@ -67,6 +67,13 @@ func (c *manualClient) Generate(ctx context.Context, req Request) (Response, err
 	return Response{}, errManualPending{key: key, promptPath: promptPath, respPath: respPath}
 }
 
+// PromptKey は req に対応するカセット / プロンプトファイルのキーを返す。
+func PromptKey(req Request) string { return cassetteKey(req) }
+
+// RenderPromptFile は LLM へ投げる直前の中間生成物（System + User）を
+// buildPromptFile と同じ整形で返す。--dry-run のプロンプト書き出しで使う。
+func RenderPromptFile(req Request) string { return buildPromptFile(req, cassetteKey(req)) }
+
 // buildPromptFile はブラウザの LLM にそのまま貼れる形にプロンプトを整形する。
 func buildPromptFile(req Request, key string) string {
 	var b strings.Builder
