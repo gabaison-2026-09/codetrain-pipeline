@@ -27,8 +27,21 @@ type Policy struct {
 		ByType       map[string]float64 `yaml:"by_type"`
 		ByDifficulty map[string]float64 `yaml:"by_difficulty"`
 	} `yaml:"target_distribution"`
-	Languages      []string `yaml:"languages"`
-	SkillNodeSlugs []string `yaml:"skill_node_slugs"`
+	Languages      []string  `yaml:"languages"`
+	SkillNodeSlugs []string  `yaml:"skill_node_slugs"`
+	Diversity      Diversity `yaml:"diversity"`
+}
+
+// Diversity は「作問条件のランダム付与」の設定。
+// 既定は無効（enabled:false）で、その間は生成プロンプトも CacheKey も
+// 従来と完全に一致する（既存カセット・manual 運用を壊さない）。
+type Diversity struct {
+	Enabled   bool `yaml:"enabled"`
+	PerPrompt struct {
+		Methods    int `yaml:"methods"`
+		Patterns   int `yaml:"patterns"`
+		SpecTopics int `yaml:"spec_topics"`
+	} `yaml:"per_prompt"`
 }
 
 // Load は path のファイルを読む。path が存在しない場合は内蔵デフォルトを使う。
@@ -56,7 +69,7 @@ func Load(path string) (Policy, error) {
 	return p, nil
 }
 
-func (p Policy) validate() error {
+func (p *Policy) validate() error {
 	if p.Version != 1 {
 		return fmt.Errorf("policy.version は 1 のみ対応です: %d", p.Version)
 	}
@@ -78,6 +91,25 @@ func (p Policy) validate() error {
 	}
 	if err := checkSum("target_distribution.by_difficulty", p.TargetDistribution.ByDifficulty); err != nil {
 		return err
+	}
+	if err := checkDiversity(&p.Diversity); err != nil {
+		return err
+	}
+	return nil
+}
+
+// checkDiversity は per_prompt の件数を検証し、有効なのに全て 0 のときは 1 に補正する。
+func checkDiversity(d *Diversity) error {
+	pp := &d.PerPrompt
+	for name, v := range map[string]int{
+		"methods": pp.Methods, "patterns": pp.Patterns, "spec_topics": pp.SpecTopics,
+	} {
+		if v < 0 {
+			return fmt.Errorf("diversity.per_prompt.%s が負です: %d", name, v)
+		}
+	}
+	if d.Enabled && pp.Methods == 0 && pp.Patterns == 0 && pp.SpecTopics == 0 {
+		pp.Methods, pp.Patterns, pp.SpecTopics = 1, 1, 1
 	}
 	return nil
 }

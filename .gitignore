@@ -3,3 +3,5 @@ tmp/
 bin/
 # eval / 生成の実行レポート。指標は再現可能なので Git には載せない（LOCAL_DEV.md §7.4）。
 reports/
+# LLM_MODE=manual の作業ファイル（プロンプト書き出し / 手貼り返答）。
+manual/

@@ -9,6 +9,7 @@ import (
 // New は LLM_MODE から Client を組み立てる。
 //
 //   - replay（既定）: カセットのみ。API キー不要。
+//   - manual: 実 API を叩かず、プロンプトをファイルへ書き出す。返答ファイルがあれば読む。API キー不要。
 //   - record: 実 API + カセット保存。ANTHROPIC_API_KEY と allowLLMCalls が必須。
 //   - live:   実 API のみ。同上。
 //
@@ -18,6 +19,9 @@ func New(cfg config.Config, allowLLMCalls bool) (Client, error) {
 	switch cfg.LLMMode {
 	case config.LLMModeReplay:
 		return &cassetteClient{dir: cfg.CassetteDir, mode: "replay"}, nil
+
+	case config.LLMModeManual:
+		return &manualClient{dir: cfg.ManualDir}, nil
 
 	case config.LLMModeRecord:
 		if err := requireLive(cfg, allowLLMCalls); err != nil {

@@ -43,6 +43,46 @@ languages: ["javascript"]
 	}
 }
 
+func TestDiversityDefaultsAndValidation(t *testing.T) {
+	dir := t.TempDir()
+	write := func(body string) (Policy, error) {
+		path := filepath.Join(dir, "p.yaml")
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return Load(path)
+	}
+	base := `version: 1
+batch: { max_new_per_run: 5 }
+target_distribution:
+  by_type: { code_reading: 1.0 }
+  by_difficulty: { "1": 1.0 }
+languages: ["javascript"]
+`
+	// diversity 無指定 → 無効。
+	p, err := write(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Diversity.Enabled {
+		t.Fatal("diversity 無指定なのに有効")
+	}
+
+	// enabled のみ指定 → per_prompt が 1/1/1 に補正される。
+	p, err = write(base + "diversity: { enabled: true }\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Diversity.PerPrompt.Methods != 1 || p.Diversity.PerPrompt.Patterns != 1 || p.Diversity.PerPrompt.SpecTopics != 1 {
+		t.Fatalf("per_prompt が補正されていない: %+v", p.Diversity.PerPrompt)
+	}
+
+	// 負値は拒否。
+	if _, err := write(base + "diversity: { enabled: true, per_prompt: { methods: -1 } }\n"); err == nil {
+		t.Fatal("負の per_prompt を受理した")
+	}
+}
+
 func TestLoadRejectsUnknownType(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "policy.yaml")

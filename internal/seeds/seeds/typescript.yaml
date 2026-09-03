@@ -1,0 +1,33 @@
+language: typescript
+
+methods:
+  - "Array.prototype.map"
+  - "Array.prototype.filter"
+  - "Array.prototype.reduce"
+  - "Array.prototype.find"
+  - "Object.keys / values / entries"
+  - "Object.freeze"
+  - "JSON.parse / JSON.stringify"
+  - "Promise.all"
+  - "Promise.allSettled"
+  - "Map / Set"
+  - "Array.from"
+  - "structuredClone"
+
+patterns:
+  - "ユニオン型を判別可能ユニオンで絞り込む"
+  - "ジェネリクスで入出力の型を関連づける"
+  - "as const でリテラル型を保持する"
+  - "型ガード関数（x is T）で絞り込む"
+  - "Partial / Pick / Omit でユーティリティ型を組み立てる"
+  - "unknown を受けて明示的に narrowing する"
+
+spec_topics:
+  - "型注釈は実行時に消える（構造的型付け）"
+  - "any と unknown の違い"
+  - "null / undefined と strictNullChecks"
+  - "型の絞り込み（narrowing）と制御フロー解析"
+  - "enum と union リテラルの使い分け"
+  - "型アサーション（as）が実行時チェックにならないこと"
+  - "== と === の型強制"
+  - "イベントループとマイクロタスク（Promise vs setTimeout）"
