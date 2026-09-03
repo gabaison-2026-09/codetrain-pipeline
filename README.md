@@ -44,6 +44,29 @@ admin（codetrain-admin → codetrain-api /v1/admin/*）でレビュー
 `generate` / `regenerate` に `--allow-llm-calls` を付け `LLM_MODE=record|live` の
 ときだけ実 API を呼ぶ（環境変数にキーがあるだけでは課金しない。LOCAL_DEV.md §7.1）。
 
+## LLM プロバイダの切り替え（`LLM_PROVIDER`）
+
+実 API（`record` / `live`）をどこへ向けるか。`replay` / `manual` は非依存。
+
+| `LLM_PROVIDER` | 向き先 | 認証 | モデル指定 |
+| --- | --- | --- | --- |
+| `bedrock`（**既定**） | Amazon Bedrock（`anthropic-sdk-go` の Bedrock backend） | AWS 認証情報チェーン（環境変数 / 共有 config / EKS Pod Identity / IRSA） | `BEDROCK_MODEL_ID`（既定 `apac.anthropic.claude-haiku-4-5-20251001-v1:0`）、リージョンは `AWS_REGION`（既定 `ap-northeast-1`） |
+| `anthropic` | Anthropic API 直（`net/http`） | `ANTHROPIC_API_KEY` | `ANTHROPIC_MODEL`（既定 `claude-haiku-4-5`）、`ANTHROPIC_BASE_URL` |
+
+デプロイは Bedrock（Claude Haiku）で確定しているため既定は `bedrock`。ローカルで
+Anthropic 直を叩きたいときは `LLM_PROVIDER=anthropic` を明示する。
+
+```bash
+# Bedrock で 1 問だけ生成（AWS 認証情報のある環境で）
+LLM_PROVIDER=bedrock AWS_REGION=ap-northeast-1 LLM_MODE=live \
+  pipeline generate --allow-llm-calls --max-retries 1
+```
+
+**Bedrock を剥がすとき**: `internal/llm/bedrock.go` を削除 → `internal/llm/factory.go`
+の `liveClient` から `bedrock` ケースを削除 → `internal/config/config.go` の
+`LLM_PROVIDER` 既定を `anthropic` に戻す → `go mod tidy`。Bedrock 固有依存
+（`anthropic-sdk-go` / `aws-sdk-go-v2`）はこれで落ちる。
+
 `--dry-run` は LLM 呼び出しも DB 書き込みもせず、**LLM へ投げる直前のプロンプト
 （中間生成物：System + User）** を `reports/<ts>/prompts/<key>.md` に書き出す
 （`LLM_MODE` は問わない。DB 接続は必要）。プロンプトの中身を確認したいときはこれが最短。

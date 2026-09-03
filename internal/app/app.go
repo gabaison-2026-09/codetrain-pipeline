@@ -42,6 +42,7 @@ func New(ctx context.Context) (*App, func(), error) {
 }
 
 // LLM は LLM クライアントを組み立てる。allowLLMCalls は --allow-llm-calls フラグ。
-func (a *App) LLM(allowLLMCalls bool) (llm.Client, error) {
-	return llm.New(a.Cfg, allowLLMCalls)
+// ctx は Bedrock backend（AWS 認証情報の解決）の初期化に使う。
+func (a *App) LLM(ctx context.Context, allowLLMCalls bool) (llm.Client, error) {
+	return llm.New(ctx, a.Cfg, allowLLMCalls)
 }

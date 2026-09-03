@@ -12,6 +12,22 @@ import (
 	"strings"
 )
 
+// LLMProvider は実 API（record / live）をどのプロバイダへ向けるか。
+//
+// デプロイ時は Amazon Bedrock（Claude Haiku）を使うと決定したため既定は bedrock。
+// 将来 Bedrock を剥がして Anthropic 直（または別ゲートウェイ）へ戻す場合は
+// LLM_PROVIDER=anthropic を指定するだけで切り替わる（internal/llm/bedrock.go を
+// 削除して factory の分岐を外せば依存も落とせる）。
+// replay / manual モードはプロバイダに依存しない。
+type LLMProvider string
+
+const (
+	// LLMProviderAnthropic は Anthropic Messages API を直接叩く（net/http）。
+	LLMProviderAnthropic LLMProvider = "anthropic"
+	// LLMProviderBedrock は Amazon Bedrock 経由で Claude を叩く（anthropic-sdk-go の Bedrock backend）。
+	LLMProviderBedrock LLMProvider = "bedrock"
+)
+
 // LLMMode は LLM 呼び出しの動作モード（LOCAL_DEV.md §7.1）。
 type LLMMode string
 
@@ -33,9 +49,11 @@ type Config struct {
 	DatabaseURL string
 
 	LLMMode          LLMMode
+	LLMProvider      LLMProvider
 	AnthropicAPIKey  string
 	AnthropicModel   string
 	AnthropicBaseURL string
+	BedrockModelID   string
 	CassetteDir      string
 	ManualDir        string
 
@@ -52,9 +70,11 @@ func Load() (Config, error) {
 	cfg := Config{
 		DatabaseURL:      env("DATABASE_URL", ""),
 		LLMMode:          LLMMode(env("LLM_MODE", string(LLMModeReplay))),
+		LLMProvider:      LLMProvider(env("LLM_PROVIDER", string(LLMProviderBedrock))),
 		AnthropicAPIKey:  env("ANTHROPIC_API_KEY", ""),
 		AnthropicModel:   env("ANTHROPIC_MODEL", "claude-haiku-4-5"),
 		AnthropicBaseURL: strings.TrimRight(env("ANTHROPIC_BASE_URL", "https://api.anthropic.com"), "/"),
+		BedrockModelID:   env("BEDROCK_MODEL_ID", "apac.anthropic.claude-haiku-4-5-20251001-v1:0"),
 		CassetteDir:      env("CASSETTE_DIR", "testdata/cassettes"),
 		ManualDir:        env("MANUAL_DIR", "manual"),
 		PolicyPath:       env("POLICY_PATH", "policy/policy.yaml"),
@@ -72,11 +92,29 @@ func Load() (Config, error) {
 	default:
 		return Config{}, fmt.Errorf("LLM_MODE は replay / record / live / manual のいずれかです: %q", cfg.LLMMode)
 	}
+	switch cfg.LLMProvider {
+	case LLMProviderAnthropic, LLMProviderBedrock:
+	default:
+		return Config{}, fmt.Errorf("LLM_PROVIDER は anthropic / bedrock のいずれかです: %q", cfg.LLMProvider)
+	}
 	if cfg.GenMaxRetries < 1 {
 		return Config{}, fmt.Errorf("GEN_MAX_RETRIES は 1 以上です: %d", cfg.GenMaxRetries)
 	}
 
 	return cfg, nil
+}
+
+// ModelID は現在の LLM_PROVIDER で使うモデル識別子を返す。
+//
+//   - bedrock: BEDROCK_MODEL_ID（推論プロファイル ID / モデル ID）
+//   - anthropic: ANTHROPIC_MODEL
+//
+// generate / regenerate はこの値をそのまま LLM リクエストの Model に載せる。
+func (c Config) ModelID() string {
+	if c.LLMProvider == LLMProviderBedrock {
+		return c.BedrockModelID
+	}
+	return c.AnthropicModel
 }
 
 func env(key, def string) string {
